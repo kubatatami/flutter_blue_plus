@@ -68,7 +68,7 @@ typedef NS_ENUM(NSUInteger, LogLevel) {
     instance.scanCounts = [NSMutableDictionary new];
     instance.logLevel = LDEBUG;
     instance.showPowerAlert = @(YES);
-    instance.restoreState = @(NO);
+    instance.restoreState = @(YES);
 
     [registrar addMethodCallDelegate:instance channel:methodChannel];
 }
@@ -1063,16 +1063,26 @@ typedef NS_ENUM(NSUInteger, LogLevel) {
             // update connection state
             Log(LDEBUG, @"Restore: already connected to %@", peripheral.identifier.UUIDString);
             [self centralManager:central didConnectPeripheral:peripheral];
-            
+
+            NSMutableArray *services = [NSMutableArray new];
+            for (CBService *s in [peripheral services])
+            {
+                [services addObject:[self bmBluetoothService:peripheral service:s]];
+            }
+            // See BmDiscoverServicesResult
+            NSDictionary* response = @{
+                    @"remote_id":       [peripheral.identifier UUIDString],
+                    @"services":        services,
+                    @"success":         @(1),
+                    @"error_string":    @"success",
+                    @"error_code":      @(0),
+            };
+            Log(LDEBUG, @"Restore: send services %d", services.count);
+            // Send updated tree
+            [self.methodChannel invokeMethod:@"OnDiscoveredServices" arguments:response];
+
             for (CBService *service in peripheral.services) {
-
-                // restore services
-                [self peripheral:peripheral didDiscoverServices:nil];
-                
                 for (CBCharacteristic *characteristic in service.characteristics) {
-
-                    // restore characteristics
-                    [self peripheral:peripheral didDiscoverCharacteristicsForService:service error:nil];
 
                     // restore notifications
                     if (characteristic.isNotifying) {
